@@ -18,7 +18,7 @@ import {
   Volume2Icon,
   VolumeXIcon,
 } from "@/lib/icons";
-import { secondsToMMSS } from "@/lib/utils";
+import { secondsToMMSS, throttle } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
@@ -26,9 +26,12 @@ import { Text } from "@/components/ui/text";
 const videoSource =
   "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
+// const videoSource = require("../assets/landscape-00.mp4");
+
 export default function TabOneScreen() {
   const [time, setTime] = useState<string | null>("00:00");
   const [progress, setProgress] = useState(0);
+  const [oldIsPlaying, setOldIsPlaying] = useState(false);
 
   const videoRef = useRef<VideoView | null>(null);
   const insets = useSafeAreaInsets();
@@ -57,16 +60,40 @@ export default function TabOneScreen() {
     };
   }, []);
 
-  const onSliderValueChange = (value: number) => {
+  useEffect(() => {
+    const updateProgress = throttle(() => {
+      const currentTime = player.currentTime;
+      const duration = player.duration;
+
+      if (duration > 0) {
+        setProgress(currentTime / duration);
+        setTime(secondsToMMSS(currentTime));
+      }
+    }, 250);
+
+    const interval = setInterval(updateProgress, 250);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [player]);
+
+  const onSlidingComplete = (value: number) => {
     const duration = player.duration;
-    const currentTime = player.currentTime;
-
     const newTime = value * duration;
-    const timeToSeek = newTime - currentTime;
-
-    player.seekBy(timeToSeek);
-    setProgress(value);
+    player.seekBy(newTime - player.currentTime);
     setTime(secondsToMMSS(newTime));
+
+    if (oldIsPlaying) {
+      player.play();
+      setOldIsPlaying(false);
+    }
+  };
+
+  const onSlidingStart = () => {
+    if (isPlaying) {
+      player.pause();
+      setOldIsPlaying(true);
+    }
   };
 
   return (
@@ -163,10 +190,14 @@ export default function TabOneScreen() {
               <Slider
                 className="h-10 w-full bg-secondary"
                 value={progress}
+                minimumValue={0}
+                maximumValue={1}
+                step={0.01}
                 minimumTrackTintColor="#f8fafc"
                 maximumTrackTintColor="#1f242b"
                 tapToSeek
-                onValueChange={onSliderValueChange}
+                onSlidingStart={onSlidingStart}
+                onSlidingComplete={onSlidingComplete}
               />
             </View>
           </View>
