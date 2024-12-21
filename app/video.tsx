@@ -7,6 +7,13 @@ import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 
 import Slider from "@react-native-community/slider";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -35,6 +42,8 @@ export default function TabOneScreen() {
 
   const videoRef = useRef<VideoView | null>(null);
   const insets = useSafeAreaInsets();
+  const controlsVisible = useSharedValue(0);
+  const controlsVisibleDerived = useDerivedValue(() => controlsVisible.value);
 
   const player = useVideoPlayer(videoSource, (player) => {
     // player.loop = true;
@@ -77,6 +86,16 @@ export default function TabOneScreen() {
     };
   }, [player]);
 
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (controlsVisibleDerived.value === 1) {
+        controlsVisible.value = 0;
+      }
+    }, 5000);
+
+    return () => clearTimeout(timeout);
+  }, [controlsVisibleDerived]);
+
   const onSlidingComplete = (value: number) => {
     const duration = player.duration;
     const newTime = value * duration;
@@ -96,113 +115,129 @@ export default function TabOneScreen() {
     }
   };
 
-  return (
-    <View
-      className="relative flex-1 border border-red-500"
-      style={{ marginTop: 8, marginBottom: insets.bottom }}>
-      <StatusBar hidden />
-      <VideoView
-        ref={videoRef}
-        style={{ width: "100%", height: "100%" }}
-        player={player}
-        allowsFullscreen={false}
-        allowsPictureInPicture
-        nativeControls={false}
-      />
-      <View className="absolute inset-0 flex-1 bg-black/70 p-4">
-        <View className="flex-1 justify-between gap-4">
-          <View className="flex-row items-center justify-between gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onPress={() => router.push("/")}>
-              <ChevronLeftIcon
-                className="text-foreground"
-                size={32}
-                strokeWidth={1.25}
-              />
-            </Button>
-          </View>
-          <View className="flex-row items-center justify-center gap-8">
-            <Button
-              variant="ghost"
-              size="icon"
-              onPress={() => player.seekBy(-5)}>
-              <RewindIcon
-                className="fill-foreground"
-                size={32}
-                strokeWidth={1.25}
-              />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onPress={() => (isPlaying ? player.pause() : player.play())}>
-              {isPlaying ? (
-                <PauseIcon
-                  className="fill-foreground"
-                  size={32}
-                  strokeWidth={1.25}
-                />
-              ) : (
-                <PlayIcon
-                  className="fill-foreground"
-                  size={32}
-                  strokeWidth={1.25}
-                />
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onPress={() => player.seekBy(5)}>
-              <FastForwardIcon
-                className="fill-foreground"
-                size={32}
-                strokeWidth={1.25}
-              />
-            </Button>
-          </View>
-          <View className="gap-6">
-            <View className="flex-row items-center justify-between gap-4">
-              <Text className="text-sm text-foreground/70">{time}</Text>
-              <Button
-                variant="ghost"
-                size="icon"
-                onPress={() => (player.muted = !muted)}>
-                {muted ? (
-                  <VolumeXIcon
-                    className="text-foreground/70"
-                    size={24}
-                    strokeWidth={1.25}
-                  />
-                ) : (
-                  <Volume2Icon
-                    className="text-foreground"
-                    size={24}
-                    strokeWidth={1.25}
-                  />
-                )}
-              </Button>
-            </View>
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(controlsVisible.value, { duration: 300 }),
+  }));
 
-            <View>
-              <Slider
-                className="h-10 w-full bg-secondary"
-                value={progress}
-                minimumValue={0}
-                maximumValue={1}
-                step={0.01}
-                minimumTrackTintColor="#f8fafc"
-                maximumTrackTintColor="#1f242b"
-                tapToSeek
-                onSlidingStart={onSlidingStart}
-                onSlidingComplete={onSlidingComplete}
-              />
+  const tapGesture = Gesture.Tap().onEnd(() => {
+    controlsVisible.value = controlsVisible.value === 1 ? 0 : 1;
+  });
+
+  return (
+    <GestureDetector gesture={tapGesture}>
+      <View
+        className="relative flex-1 border border-red-500"
+        style={{ marginTop: 8, marginBottom: insets.bottom }}>
+        <StatusBar hidden />
+
+        <VideoView
+          ref={videoRef}
+          style={{ width: "100%", height: "100%" }}
+          player={player}
+          allowsFullscreen={false}
+          allowsPictureInPicture
+          nativeControls={false}
+        />
+
+        <Animated.View
+          className="absolute inset-0 flex-1 bg-black/70 p-4"
+          style={animatedStyle}>
+          {controlsVisible && (
+            <View className="flex-1 justify-between gap-4">
+              <View className="flex-row items-center justify-between gap-4">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onPress={() => router.push("/")}>
+                  <ChevronLeftIcon
+                    className="text-foreground"
+                    size={32}
+                    strokeWidth={1.25}
+                  />
+                </Button>
+              </View>
+              <View className="flex-row items-center justify-center gap-8">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onPress={() => player.seekBy(-5)}>
+                  <RewindIcon
+                    className="fill-foreground"
+                    size={32}
+                    strokeWidth={1.25}
+                  />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onPress={() => (isPlaying ? player.pause() : player.play())}>
+                  {isPlaying ? (
+                    <PauseIcon
+                      className="fill-foreground"
+                      size={32}
+                      strokeWidth={1.25}
+                    />
+                  ) : (
+                    <PlayIcon
+                      className="fill-foreground"
+                      size={32}
+                      strokeWidth={1.25}
+                    />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onPress={() => player.seekBy(5)}>
+                  <FastForwardIcon
+                    className="fill-foreground"
+                    size={32}
+                    strokeWidth={1.25}
+                  />
+                </Button>
+              </View>
+              <View className="gap-6">
+                <View className="flex-row items-center justify-between gap-4">
+                  <Text className="text-sm text-foreground/70">{time}</Text>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onPress={() => (player.muted = !muted)}>
+                    {muted ? (
+                      <VolumeXIcon
+                        className="text-foreground/70"
+                        size={24}
+                        strokeWidth={1.25}
+                      />
+                    ) : (
+                      <Volume2Icon
+                        className="text-foreground"
+                        size={24}
+                        strokeWidth={1.25}
+                      />
+                    )}
+                  </Button>
+                </View>
+
+                <View>
+                  <Slider
+                    className="h-10 w-full bg-secondary"
+                    value={progress}
+                    minimumValue={0}
+                    maximumValue={1}
+                    step={0.01}
+                    minimumTrackTintColor="#f8fafc"
+                    maximumTrackTintColor="#1f242b"
+                    tapToSeek
+                    onSlidingStart={onSlidingStart}
+                    onSlidingComplete={onSlidingComplete}
+                  />
+                </View>
+              </View>
             </View>
-          </View>
-        </View>
+          )}
+        </Animated.View>
       </View>
-    </View>
+    </GestureDetector>
   );
 }
